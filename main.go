@@ -54,8 +54,16 @@ func writeOutput(articles []string) {
 	if err != nil {
 		panic(err)
 	}
+	arts := make([]string, len(articles))
 	defer sfs.Close()
-	_, write_err := sfs.WriteString(strings.Join(articles, "\n"))
+	for i := 0; i < len(articles); i++ {
+		var sb strings.Builder
+		sb.WriteString(strconv.Itoa(i))
+		sb.WriteString(" ")
+		sb.WriteString(articles[i])
+		arts[i] = sb.String()
+	}
+	_, write_err := sfs.WriteString(strings.Join(arts, "\n"))
 	if write_err != nil {
 		panic(write_err)
 	}
@@ -73,9 +81,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	articleSepRegex := regexp.MustCompile(`\n\s*\n`)
 	yearRegex := regexp.MustCompile(`\d\d\d\d`)
-	numsRegex := regexp.MustCompile(`[a-z.]\d`)
+	numsRegex := regexp.MustCompile(`\d`)
 	pagesRegex := regexp.MustCompile(`(\d+)[–-—](\d+)`)
 	abstractRegex := regexp.MustCompile(`(?i)abstract[.:]`)
 	kwRegex := regexp.MustCompile(`(?i)key\s?words[.:]`)
@@ -112,7 +119,15 @@ func main() {
 		normArt.abstract = artAbstract
 		normArt.keywords = artKW
 
-		artStrings := strings.Split(art, "\n")
+		artRaw := strings.Split(art, "\r")
+		var artStrings []string
+		for _, str := range artRaw {
+			// Trim spaces and check if the string is not empty
+			if trimmed := strings.TrimSpace(str); trimmed != "" {
+				artStrings = append(artStrings, trimmed) // Add valid strings to the new slice
+			}
+		}
+
 		writeOutput(artStrings)
 		doi := strings.TrimSpace(strings.TrimPrefix(doiRegex.FindString(art), "doi"))
 		normArt.doi = doi
@@ -138,13 +153,14 @@ func main() {
 		for _, auth := range strings.Split(authorsRaw, ", ") {
 			authorsNormalized = append(authorsNormalized, authSuffxRegex.ReplaceAllStringFunc(auth, deleteSubstring))
 		}
-		normArt.authors = strings.Join(authorsNormalized, ", ")
+		normArt.authors = strings.TrimSpace(strings.Join(authorsNormalized, ", "))
 		// (end) ----- AUTHORS BLOCK -------
-
 		// (start) ----- AFFILIATIONS BLOCK -------
+		// authorsRaw is just surnames with or without number, so we extract digits here
 		authorAffilNums := numsRegex.FindAllString(authorsRaw, -1)
 		affilations := make([]string, len(authorsNormalized))
 		// Fill affiliations with same value if not enumerated
+		fmt.Println(artStrings[0])
 		if len(authorAffilNums) == 0 {
 			for j := range affilations {
 				affilations[j] = strings.TrimPrefix(artStrings[1], "1")
@@ -152,14 +168,12 @@ func main() {
 		} else {
 			affiliationsNumerated := make([]string, len(authorAffilNums))
 			copy(affiliationsNumerated, artStrings[1:])
-			writeOutput(affiliationsNumerated)
 			for i, affilNum := range authorAffilNums {
-				normNum := string([]rune(affilNum)[1])
-				idx := slices.IndexFunc(affiliationsNumerated, func(s string) bool { return strings.HasPrefix(s, normNum) })
+				idx := slices.IndexFunc(affiliationsNumerated, func(s string) bool { return strings.HasPrefix(s, affilNum) })
 				if idx != -1 {
-					affilations[i] = strings.TrimPrefix(affiliationsNumerated[idx], normNum)
+					affilations[i] = strings.TrimPrefix(affiliationsNumerated[idx], affilNum)
 				} else {
-					printError(artIndex+1, fmt.Sprintf("Affilation not found: %s", normNum))
+					printError(artIndex+1, fmt.Sprintf("Affilation not found: %s", affilNum))
 				}
 			}
 		}
@@ -206,8 +220,6 @@ func main() {
 		f.SetCellValue("Sheet1", numCell, artNumStr)
 		f.SetCellValue("Sheet1", doiCell, art.doi)
 		fmt.Printf("Article %d\n", artI+1)
-
-		fmt.Printf("Doi found: %s\n", art.doi)
 
 		for artRefI, ref := range art.references {
 			refI += 1
