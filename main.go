@@ -83,32 +83,44 @@ func main() {
 	authSuffxRegex := regexp.MustCompile(`\d+(,)?(\*)?`)
 	mailSeps := [4]string{"E-mail", "Email", "email", "e-mail"}
 
-	arr := articleSepRegex.Split(res.Body, -1)
-	fmt.Printf("Articles found: %d\n", len(arr))
-	articlesNormalized := make([]Article, len(arr))
-	for artIndex, art := range arr {
+	artRefSep := regexp.MustCompile(`(?s)(.*?)<<<(.*?)>>>`)
+	matches := artRefSep.FindAllStringSubmatch(res.Body, -1)
+
+	// Collect parsed articles and references
+	var articles []string
+	var references []string
+	for _, match := range matches {
+		articles = append(articles, match[1])     // Article content before <<<
+		references = append(references, match[2]) // References between <<< >>>
+	}
+
+	fmt.Printf("Articles found: %d\n", len(articles))
+
+	articlesNormalized := make([]Article, len(articles))
+	for artIndex, art := range articles {
 		normArt := Article{}
-		data := strings.Split(art, "<<<")
-		artMeta, artReferences := data[0], readOrDefault(data, 1, "")
-		referencesArr := strings.Split(artReferences, "\n")
+		referencesArr := strings.Split(references[artIndex], "\n")
 		normArt.references = referencesArr
-		if len(abstractRegex.Split(artMeta, 2)) < 2 {
-			printError(artIndex+1, fmt.Sprintf("Can't get Abstract from article data: %s", artMeta))
+		if len(abstractRegex.Split(art, 2)) < 2 {
+			printError(artIndex+1, fmt.Sprintf("Can't get Abstract from article data: %s", art))
+			fmt.Print(art)
 		}
-		abstractAndKW := kwRegex.Split(abstractRegex.Split(artMeta, 2)[1], 2)
+		abstractAndKW := kwRegex.Split(abstractRegex.Split(art, 2)[1], 2)
 		artAbstract, artKW :=
 			abstractRegex.ReplaceAllStringFunc(abstractAndKW[0], deleteSubstring),
 			kwRegex.ReplaceAllStringFunc(abstractAndKW[1], deleteSubstring)
 		normArt.abstract = artAbstract
 		normArt.keywords = artKW
 
+		artStrings := strings.Split(art, "\n")
 		writeOutput(artStrings)
+		doi := strings.TrimSpace(strings.TrimPrefix(doiRegex.FindString(art), "doi"))
 		normArt.doi = doi
 		// refactor on loop
-		authorsTitle := artStrings[0]
-		splittedAuthorsTitleAndMeta := yearRegex.Split(authorsTitle, 2)
+		splittedAuthorsTitleAndMeta := yearRegex.Split(art, 2)
 		if len(splittedAuthorsTitleAndMeta) < 2 {
-			printError(artIndex+1, fmt.Sprintf("Something went wrong when splitting author, title and meta by year: %s", authorsTitle))
+			fmt.Print(art)
+			printError(artIndex+1, fmt.Sprintf("Something went wrong when splitting author, title and meta by year: %s", splittedAuthorsTitleAndMeta))
 		}
 
 		authorsRaw, titleAndMeta := splittedAuthorsTitleAndMeta[0], splittedAuthorsTitleAndMeta[1]
