@@ -49,13 +49,16 @@ func deleteSubstring(s string) string {
 	return ""
 }
 
-func findMatchingString(slice []string, regex *regexp.Regexp) (string, bool) {
-	for _, str := range slice {
-		if regex.MatchString(str) {
-			return str, true
-		}
+func writeOutput(articles []string) {
+	sfs, err := os.OpenFile("output.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
 	}
-	return "", false
+	defer sfs.Close()
+	_, write_err := sfs.WriteString(strings.Join(articles, "\n"))
+	if write_err != nil {
+		panic(write_err)
+	}
 }
 
 func printError(artNum int, message string) {
@@ -99,8 +102,7 @@ func main() {
 		normArt.abstract = artAbstract
 		normArt.keywords = artKW
 
-		artStrings := strings.Split(artMeta, "\n")
-		doi := strings.TrimSpace(strings.TrimPrefix(doiRegex.FindString(artMeta), "doi"))
+		writeOutput(artStrings)
 		normArt.doi = doi
 		// refactor on loop
 		authorsTitle := artStrings[0]
@@ -138,7 +140,7 @@ func main() {
 		} else {
 			affiliationsNumerated := make([]string, len(authorAffilNums))
 			copy(affiliationsNumerated, artStrings[1:])
-
+			writeOutput(affiliationsNumerated)
 			for i, affilNum := range authorAffilNums {
 				normNum := string([]rune(affilNum)[1])
 				idx := slices.IndexFunc(affiliationsNumerated, func(s string) bool { return strings.HasPrefix(s, normNum) })
