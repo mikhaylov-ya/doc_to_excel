@@ -111,8 +111,8 @@ func main() {
 		artAbstract, artKW :=
 			abstractRegex.ReplaceAllStringFunc(abstractAndKW[0], deleteSubstring),
 			kwRegex.ReplaceAllStringFunc(abstractAndKW[1], deleteSubstring)
-		normArt.abstract = artAbstract
-		normArt.keywords = artKW
+		normArt.abstract = strings.TrimSpace(artAbstract)
+		normArt.keywords = strings.TrimSpace(artKW)
 
 		artRaw := strings.Split(art, "\r")
 		var artStrings []string
@@ -147,7 +147,7 @@ func main() {
 		}
 
 		title, numberMeta := splittedTitleMeta[0], splittedTitleMeta[1]
-		normArt.title = strings.TrimPrefix(title, ".")
+		normArt.title = strings.TrimSpace(strings.TrimPrefix(title, "."))
 		normArt.pages = pagesRegex.FindString(numberMeta)
 		// (start) ----- AUTHORS BLOCK -------
 		authorsNormalized := []string{}
@@ -161,7 +161,6 @@ func main() {
 		authorAffilNums := numsRegex.FindAllStringSubmatch(authorsRaw, -1)
 		affilations := make([]string, len(authorsNormalized))
 		// Fill affiliations with same value if not enumerated
-		fmt.Println(artStrings[0])
 		if len(authorAffilNums) == 0 {
 			for j := range affilations {
 				affilations[j] = strings.TrimPrefix(artStrings[1], "1")
@@ -223,7 +222,7 @@ func main() {
 		f.SetCellValue("Sheet1", abstractCell, art.abstract)
 		f.SetCellValue("Sheet1", numCell, artNumStr)
 		f.SetCellValue("Sheet1", doiCell, art.doi)
-		fmt.Printf("Article %d\n", artI+1)
+		fmt.Printf("Article %d: Success\n", artI+1)
 
 		for artRefI, ref := range art.references {
 			refI += 1
