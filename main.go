@@ -38,13 +38,6 @@ type Article struct {
 	doi          string
 }
 
-func readOrDefault(arr []string, index int, defaultValue string) string {
-	if index >= 0 && index < len(arr) {
-		return arr[index]
-	}
-	return defaultValue
-}
-
 func deleteSubstring(s string) string {
 	return ""
 }
@@ -72,6 +65,7 @@ func writeOutput(articles []string) {
 func printError(artNum int, message string) {
 	fmt.Printf("Error in article %d: %s\n", artNum, message)
 }
+
 func main() {
 	docPath := os.Args[1]
 	if docPath == "" {
@@ -82,12 +76,13 @@ func main() {
 		panic(err)
 	}
 	yearRegex := regexp.MustCompile(`\d\d\d\d`)
-	numsRegex := regexp.MustCompile(`\d`)
+	numsRegex := regexp.MustCompile(`[[:alpha:].](\d)`)
 	pagesRegex := regexp.MustCompile(`(\d+)[–-—](\d+)`)
 	abstractRegex := regexp.MustCompile(`(?i)abstract[.:]`)
 	kwRegex := regexp.MustCompile(`(?i)key\s?words[.:]`)
 	doiRegex := regexp.MustCompile(`(?i)\bdoi(?:\s|\.|:)\s?(\d[^\n]*)`)
 	authSuffxRegex := regexp.MustCompile(`\d+(,)?(\*)?`)
+	refSepRegex := regexp.MustCompile(`\r\n|\r|\n`)
 	mailSeps := [4]string{"E-mail", "Email", "email", "e-mail"}
 
 	artRefSep := regexp.MustCompile(`(?s)(.*?)<<<(.*?)>>>`)
@@ -106,7 +101,7 @@ func main() {
 	articlesNormalized := make([]Article, len(articles))
 	for artIndex, art := range articles {
 		normArt := Article{}
-		referencesArr := strings.Split(references[artIndex], "\n")
+		referencesArr := refSepRegex.Split(references[artIndex], -1)
 		normArt.references = referencesArr
 		if len(abstractRegex.Split(art, 2)) < 2 {
 			printError(artIndex+1, fmt.Sprintf("Can't get Abstract from article data: %s", art))
@@ -129,7 +124,13 @@ func main() {
 		}
 
 		writeOutput(artStrings)
-		doi := strings.TrimSpace(strings.TrimPrefix(doiRegex.FindString(art), "doi"))
+		// DOI LOOP
+		var doi string
+		for _, str := range artStrings {
+			if doiRegex.MatchString(str) {
+				doi = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(str, "doi"), ":"), "."))
+			}
+		}
 		normArt.doi = doi
 		// refactor on loop
 		splittedAuthorsTitleAndMeta := yearRegex.Split(art, 2)
@@ -157,7 +158,7 @@ func main() {
 		// (end) ----- AUTHORS BLOCK -------
 		// (start) ----- AFFILIATIONS BLOCK -------
 		// authorsRaw is just surnames with or without number, so we extract digits here
-		authorAffilNums := numsRegex.FindAllString(authorsRaw, -1)
+		authorAffilNums := numsRegex.FindAllStringSubmatch(authorsRaw, -1)
 		affilations := make([]string, len(authorsNormalized))
 		// Fill affiliations with same value if not enumerated
 		fmt.Println(artStrings[0])
@@ -168,12 +169,15 @@ func main() {
 		} else {
 			affiliationsNumerated := make([]string, len(authorAffilNums))
 			copy(affiliationsNumerated, artStrings[1:])
-			for i, affilNum := range authorAffilNums {
-				idx := slices.IndexFunc(affiliationsNumerated, func(s string) bool { return strings.HasPrefix(s, affilNum) })
+			for i, match := range authorAffilNums {
+				idx := slices.IndexFunc(affiliationsNumerated, func(s string) bool { return strings.HasPrefix(s, match[1]) })
 				if idx != -1 {
-					affilations[i] = strings.TrimPrefix(affiliationsNumerated[idx], affilNum)
+					if i >= len(affilations) {
+						printError(artIndex+1, "Authors have more affilation numbers than affilations")
+					}
+					affilations[i] = strings.TrimPrefix(affiliationsNumerated[idx], match[1])
 				} else {
-					printError(artIndex+1, fmt.Sprintf("Affilation not found: %s", affilNum))
+					printError(artIndex+1, fmt.Sprintf("Affilation not found: %s", match))
 				}
 			}
 		}
