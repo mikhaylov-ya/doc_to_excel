@@ -4,12 +4,12 @@ go 1.22.2
 
 require (
 	code.sajari.com/docconv/v2 v2.0.0-pre.4
+	github.com/PuerkitoBio/goquery v1.5.1
 	github.com/xuri/excelize/v2 v2.8.1
 )
 
 require (
 	github.com/JalfResi/justext v0.0.0-20221106200834-be571e3e3052 // indirect
-	github.com/PuerkitoBio/goquery v1.5.1 // indirect
 	github.com/advancedlogic/GoOse v0.0.0-20191112112754-e742535969c1 // indirect
 	github.com/andybalholm/cascadia v1.2.0 // indirect
 	github.com/araddon/dateparse v0.0.0-20200409225146-d820a6159ab1 // indirect
