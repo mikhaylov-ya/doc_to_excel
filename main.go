@@ -101,7 +101,7 @@ func main() {
 	yearRegex := regexp.MustCompile(`\d\d\d\d`)
 	numsRegex := regexp.MustCompile(`[[:alpha:].](\d)`)
 	pagesRegex := regexp.MustCompile(`(\d+)[–-—](\d+)`)
-	abstractRegex := regexp.MustCompile(`(?i)abstract[.:]`)
+	abstractRegex := regexp.MustCompile(`(?i)abstract[s.:]`)
 	kwRegex := regexp.MustCompile(`(?i)key\s?words[.:]`)
 	doiRegex := regexp.MustCompile(`(?i)\bdoi(?:\s|\.|:)\s?(\d[^\n]*)`)
 	authSuffxRegex := regexp.MustCompile(`\d+(,)?(\*)?`)
@@ -260,6 +260,8 @@ func main() {
 		}
 	}()
 	f.NewSheet("References")
+	f.NewSheet("Doi")
+
 	var refI = 0
 	for artI, art := range articlesNormalized {
 		artNumStr := strconv.Itoa(artI + 1)
@@ -271,6 +273,8 @@ func main() {
 		abstractCell := fmt.Sprintf("F%s", artNumStr)
 		numCell := fmt.Sprintf("G%s", artNumStr)
 		doiCell := fmt.Sprintf("H%s", artNumStr)
+
+		doiSheetdoiCell := fmt.Sprintf("B%s", artNumStr)
 		f.SetCellValue("Sheet1", pagesCell, art.pages)
 		f.SetCellValue("Sheet1", authorsCell, art.authors)
 		f.SetCellValue("Sheet1", affiliationsCell, art.affiliations)
@@ -279,6 +283,8 @@ func main() {
 		f.SetCellValue("Sheet1", abstractCell, art.abstract)
 		f.SetCellValue("Sheet1", numCell, artNumStr)
 		f.SetCellValue("Sheet1", doiCell, art.doi)
+
+		f.SetCellValue("Doi", doiSheetdoiCell, art.doi)
 		fmt.Printf("Article %d: Success\n", artI+1)
 
 		for artRefI, ref := range art.references {
@@ -295,15 +301,20 @@ func main() {
 			f.SetCellValue("References", fmt.Sprintf("F%s", strconv.Itoa(refI)), art.doi)
 		}
 	}
-	// Save spreadsheet by the given path.
-	if err := f.SaveAs("Book1.xlsx"); err != nil {
-		fmt.Println(err)
-	}
 	journalPathSplit := strings.SplitAfter(docPath, "/")
 	journalInfo := journalPathSplit[len(journalPathSplit)-1]
 	journal := strings.Replace(strings.SplitAfter(journalInfo, ".")[0], "doi.", "", 1)
 
 	fmt.Println(journal)
-	GetJournalPage(journal)
+	links := GetJournalPage(journal)
+	for i, link := range links {
+		fmt.Println(link)
+		f.SetCellValue("Doi", fmt.Sprintf("C%s", strconv.Itoa(i+1)), link)
+	}
+
+	// Save spreadsheet by the given path.
+	if err := f.SaveAs("Book1.xlsx"); err != nil {
+		fmt.Println("Error saving spreadsheet: ", err)
+	}
 
 }

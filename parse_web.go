@@ -89,6 +89,7 @@ func GetJournalPage(journal string) []string {
 		if goquery.NodeName(s) == "p" {
 			// first <a> is article, second <a.pdf> is PDF
 			linkSel := s.Find("a").First()
+			fmt.Println(linkSel)
 			if linkSel.Length() > 0 {
 				href, _ := linkSel.Attr("href")
 				if href != "" && !strings.Contains(href, ".pdf") {
