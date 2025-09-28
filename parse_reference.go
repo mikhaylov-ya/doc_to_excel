@@ -13,12 +13,28 @@ var yearRe = regexp.MustCompile(`\b(\d{4})([a-z])?(?:\s*[-–—]\s*\d{4})?\b`)
 var initialRe = regexp.MustCompile(`[\p{L}]\.`) // letter followed by dot (unicode aware)
 
 // markers used to split title/meta heuristically
+// Order matters: more specific markers should come first
+
+// 1. Intelligent Marker Detection
+// Second sentence search: When a period is found in the title,
+// markers are only searched starting from the second sentence, preventing false positives from
+// city names or other words that happen to match markers in the first sentence.
+
+// 2. Prioritized "//" Separator
+// Clear marker precedence: The "//" separator is now checked first
+// as the clearest marker for splitting title and meta.
+// URL protection: Added logic to detect when "//" is part of a URL (http:// or https://) and skip it in those cases
+
+// 3. Improved Marker Ordering
+// Specific markers first: Reordered the publication markers to put more specific ones
+// (like "available from") before generic ones (like "https://").
+
 var publicationMarkers = []string{
 	"available online", "available at", "available from", "available on", "available:",
 	"accessed on", "accessed", "accessed:", "retrieved", "visited",
-	"http://", "https://", "doi:", "doi.org", "vol.", "vol", "proceedings of",
-	"proceedings", "journal", "transactions", "bulletin", "annals", "in:",
-	"moscow:", "leningrad:", "novosibirsk:", "irkutsk:", "cham:", "london:",
+	"proceedings of", "proceedings", "journal", "transactions", "bulletin", "annals",
+	"vol.", "vol", "doi:", "doi.org", "http://", "https://",
+	"berlin:", "moscow:", "leningrad:", "novosibirsk:", "irkutsk:", "cham:", "london:", "saint petersburg:",
 }
 
 func pickYearIndex(ref string) (int, int, string) {
@@ -72,12 +88,7 @@ func splitTitleMeta(after string) (string, string) {
 		return "", ""
 	}
 
-	// 1) explicit "//" split (common in Slavic references)
-	if idx := strings.Index(s, "//"); idx != -1 {
-		title := strings.TrimSpace(s[:idx])
-		meta := strings.TrimSpace(s[idx+2:])
-		return title, meta
-	}
+	// 1) explicit "//" split is now handled in step 3 based on period detection
 
 	// 2) bracketed title: start with '[' ... ']' maybe followed by a dot
 	if strings.HasPrefix(s, "[") {
@@ -95,11 +106,47 @@ func splitTitleMeta(after string) (string, string) {
 	}
 
 	// 3) look for publication markers (http, Vol., Proceedings, city:, etc.)
-	if idx := findFirstOfMarkers(s, publicationMarkers); idx != -1 {
-		title := strings.TrimSpace(s[:idx])
-		meta := strings.TrimSpace(s[idx:])
-		// if marker was 'http' or 'https', ensure we include the protocol in meta
-		return title, meta
+	// First, check for // separator as the clearest marker (but not in URLs)
+	if idx := strings.Index(s, "//"); idx != -1 {
+		// Check if this is part of a URL (http:// or https://)
+		if idx > 0 && (s[idx-1] == ':' || (idx > 4 && s[idx-5:idx-1] == "http")) {
+			// This is a URL, skip this split and continue to other logic
+		} else {
+			title := strings.TrimSpace(s[:idx])
+			meta := strings.TrimSpace(s[idx+2:])
+			return title, meta
+		}
+	}
+
+	// If no // separator, check if there's a period in the title to determine search strategy
+	firstPeriodIdx := strings.Index(s, ".")
+
+	if firstPeriodIdx == -1 {
+		// No period found - search for markers in the entire text
+		if idx := findFirstOfMarkers(s, publicationMarkers); idx != -1 {
+			title := strings.TrimSpace(s[:idx])
+			meta := strings.TrimSpace(s[idx:])
+			return title, meta
+		}
+	} else {
+		// Period found - only search for markers starting from the second sentence
+		searchStart := firstPeriodIdx + 1
+		// Skip spaces after the period
+		for searchStart < len(s) && (s[searchStart] == ' ' || s[searchStart] == '\t') {
+			searchStart++
+		}
+
+		if searchStart < len(s) {
+			// Search for markers only in the text after the first sentence
+			textAfterFirstSentence := s[searchStart:]
+			if idx := findFirstOfMarkers(textAfterFirstSentence, publicationMarkers); idx != -1 {
+				// Adjust index to be relative to the original string
+				actualIdx := searchStart + idx
+				title := strings.TrimSpace(s[:actualIdx])
+				meta := strings.TrimSpace(s[actualIdx:])
+				return title, meta
+			}
+		}
 	}
 
 	// 4) fallback: look for a period followed by CAPITAL letter or '[' or '(' (heuristic)
