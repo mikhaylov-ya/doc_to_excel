@@ -31,10 +31,14 @@ var initialRe = regexp.MustCompile(`[\p{L}]\.`) // letter followed by dot (unico
 
 var publicationMarkers = []string{
 	"available online", "available at", "available from", "available on", "available:",
+	"internet resource:", "internet resource",
 	"accessed on", "accessed", "accessed:", "retrieved", "visited",
 	"proceedings of", "proceedings", "journal", "transactions", "bulletin", "annals",
-	"vol.", "vol", "doi:", "doi.org", "http://", "https://",
-	"berlin:", "moscow:", "leningrad:", "novosibirsk:", "irkutsk:", "cham:", "london:", "saint petersburg:",
+	"vol.", "http://", "https://",
+	"london,",
+	"berlin:", "moscow:", "leningrad:", "novosibirsk:", "irkutsk:", "cham:", "london:",
+	"saint petersburg:", "st. petersburg:", "new york:", "kiev:", "kyiv:", "vladivostok:",
+	"stuttgart:",
 }
 
 func pickYearIndex(ref string) (int, int, string) {
@@ -101,6 +105,12 @@ func splitTitleMeta(after string) (string, string) {
 			}
 			title := strings.TrimSpace(s[:titleEnd])
 			meta := strings.TrimSpace(s[titleEnd:])
+
+			// Check if meta starts with // separator and remove it
+			if strings.HasPrefix(meta, "//") {
+				meta = strings.TrimSpace(meta[2:])
+			}
+
 			return title, meta
 		}
 	}
@@ -113,7 +123,11 @@ func splitTitleMeta(after string) (string, string) {
 			// This is a URL, skip this split and continue to other logic
 		} else {
 			title := strings.TrimSpace(s[:idx])
-			meta := strings.TrimSpace(s[idx+2:])
+			meta := strings.TrimSpace(s[idx+2:]) // Skip the "//" and any spaces
+			// Remove any leading "//" from meta if it exists
+			if strings.HasPrefix(meta, "//") {
+				meta = strings.TrimSpace(meta[2:])
+			}
 			return title, meta
 		}
 	}
