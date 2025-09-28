@@ -39,6 +39,32 @@ func deleteSubstring(s string) string {
 	return ""
 }
 
+func formatPageNumbers(pages string) string {
+	if pages == "" {
+		return ""
+	}
+
+	// Extract the page range using a more comprehensive regex that handles all dash types
+	pagesRegex := regexp.MustCompile(`(\d+)[–-—](\d+)`)
+	matches := pagesRegex.FindStringSubmatch(pages)
+
+	if len(matches) == 3 {
+		startPage := matches[1]
+		endPage := matches[2]
+
+		// Convert to integers to handle leading zeros properly
+		start, err1 := strconv.Atoi(startPage)
+		end, err2 := strconv.Atoi(endPage)
+
+		if err1 == nil && err2 == nil {
+			// Format with leading zeros (3 digits)
+			return fmt.Sprintf("%03d-%03d", start, end)
+		}
+	}
+
+	return pages
+}
+
 func writeOutput(articles []string) {
 	sfs, err := os.OpenFile("output.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -111,8 +137,20 @@ func main() {
 		normArt.abstract = strings.TrimSpace(artAbstract)
 		normArt.keywords = strings.TrimSpace(artKW)
 
-		artRaw := strings.Split(art, "\r")
+		// Try different line ending formats
 		var artStrings []string
+
+		// First try splitting by \r\n (Windows line endings)
+		artRaw := strings.Split(art, "\r\n")
+		if len(artRaw) == 1 {
+			// Try splitting by \n (Unix line endings)
+			artRaw = strings.Split(art, "\n")
+		}
+		if len(artRaw) == 1 {
+			// Try splitting by \r (Mac line endings)
+			artRaw = strings.Split(art, "\r")
+		}
+
 		for _, str := range artRaw {
 			// Trim spaces and check if the string is not empty
 			if trimmed := strings.TrimSpace(str); trimmed != "" {
@@ -129,7 +167,6 @@ func main() {
 			}
 		}
 		normArt.doi = doi
-		// refactor on loop
 		splittedAuthorsTitleAndMeta := yearRegex.Split(art, 2)
 		if len(splittedAuthorsTitleAndMeta) < 2 {
 			fmt.Print(art)
@@ -145,7 +182,7 @@ func main() {
 
 		title, numberMeta := splittedTitleMeta[0], splittedTitleMeta[1]
 		normArt.title = strings.TrimSpace(strings.TrimPrefix(title, "."))
-		normArt.pages = pagesRegex.FindString(numberMeta)
+		normArt.pages = formatPageNumbers(pagesRegex.FindString(numberMeta))
 		// (start) ----- AUTHORS BLOCK -------
 		authorsNormalized := []string{}
 		for _, auth := range strings.Split(authorsRaw, ", ") {
@@ -159,12 +196,35 @@ func main() {
 		affilations := make([]string, len(authorsNormalized))
 		// Fill affiliations with same value if not enumerated
 		if len(authorAffilNums) == 0 {
-			for j := range affilations {
-				affilations[j] = strings.TrimPrefix(artStrings[1], "1")
+			// Look for affiliation line - it's usually the first line that contains an email or address
+			affiliationLine := ""
+			for i, str := range artStrings {
+				// Skip the first line (title/metadata) and look for lines with email or address patterns
+				if i > 0 && (strings.Contains(str, "@") || strings.Contains(str, "E-mail") || strings.Contains(str, "Email") || strings.Contains(str, "Russia") || strings.Contains(str, "China") || strings.Contains(str, "USA")) {
+					affiliationLine = str
+					break
+				}
+			}
+
+			if affiliationLine != "" {
+				fmt.Println("Affiliation (no enumeration):", affiliationLine)
+				for j := range affilations {
+					affilations[j] = strings.TrimPrefix(affiliationLine, "1")
+				}
+			} else {
+				fmt.Println("Warning: No affiliation data found for article", artIndex+1)
+				for j := range affilations {
+					affilations[j] = ""
+				}
 			}
 		} else {
-			affiliationsNumerated := make([]string, len(authorAffilNums))
-			copy(affiliationsNumerated, artStrings[1:])
+			affiliationsNumerated := make([]string, 0)
+			if len(artStrings) > 1 {
+				affiliationsNumerated = make([]string, len(artStrings)-1)
+				copy(affiliationsNumerated, artStrings[1:])
+			} else {
+				fmt.Println("Warning: No affiliation data found for article", artIndex+1)
+			}
 			for i, match := range authorAffilNums {
 				idx := slices.IndexFunc(affiliationsNumerated, func(s string) bool { return strings.HasPrefix(s, match[1]) })
 				if idx != -1 {
@@ -227,12 +287,23 @@ func main() {
 				ref = strings.TrimSuffix(ref, ">>>")
 			}
 			f.SetCellValue("References", fmt.Sprintf("A%s", strconv.Itoa(refI)), ref)
-			f.SetCellValue("References", fmt.Sprintf("B%s", strconv.Itoa(refI)), art.doi)
+			authors, year, title, meta := parseReference(ref)
+			f.SetCellValue("References", fmt.Sprintf("B%s", strconv.Itoa(refI)), authors)
+			f.SetCellValue("References", fmt.Sprintf("C%s", strconv.Itoa(refI)), year)
+			f.SetCellValue("References", fmt.Sprintf("D%s", strconv.Itoa(refI)), title)
+			f.SetCellValue("References", fmt.Sprintf("E%s", strconv.Itoa(refI)), meta)
+			f.SetCellValue("References", fmt.Sprintf("F%s", strconv.Itoa(refI)), art.doi)
 		}
 	}
 	// Save spreadsheet by the given path.
 	if err := f.SaveAs("Book1.xlsx"); err != nil {
 		fmt.Println(err)
 	}
-	GetJournalPage("IZ.22.2")
+	journalPathSplit := strings.SplitAfter(docPath, "/")
+	journalInfo := journalPathSplit[len(journalPathSplit)-1]
+	journal := strings.Replace(strings.SplitAfter(journalInfo, ".")[0], "doi.", "", 1)
+
+	fmt.Println(journal)
+	GetJournalPage(journal)
+
 }
