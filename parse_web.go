@@ -26,8 +26,8 @@ func GetJournalPage(journal string) []string {
 		return []string{}
 	}
 	journalPrefix := strings.ToUpper(matches[1])
-	journalVol := matches[2]
-	journalNum := parts[1]
+	journalVol := strings.TrimPrefix(matches[2], "0")
+	journalNum := strings.TrimPrefix(parts[1], "0")
 
 	journalKeyCatalogMap := map[string]string{
 		"IZ":  "Inv_Zool",
