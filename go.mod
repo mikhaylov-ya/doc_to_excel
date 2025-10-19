@@ -1,6 +1,6 @@
 module example.com/m/v2
 
-go 1.22.2
+go 1.22
 
 require (
 	code.sajari.com/docconv/v2 v2.0.0-pre.4
