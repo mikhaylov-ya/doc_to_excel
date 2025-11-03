@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  doc-to-excel:
+    build: .
+    container_name: doc-to-excel-converter
+    ports:
+      - "8080:8080"
+    volumes:
+      # Optional: persist temp files (for debugging)
+      - ./temp:/root/temp
+    environment:
+      - GIN_MODE=release
+      - PORT=8080
+      - TZ=UTC
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M

@@ -70,14 +70,15 @@ func printError(artNum int, message string) {
 	fmt.Printf("Error in article %d: %s\n", artNum, message)
 }
 
-func main() {
-	docPath := os.Args[1]
+// processDocument converts a DOC/DOCX file to Excel format
+// Returns error if processing fails
+func processDocument(docPath, outputPath string) error {
 	if docPath == "" {
-		panic("Path to doc file is not passed")
+		return fmt.Errorf("path to doc file is not provided")
 	}
 	res, err := docconv.ConvertPath(docPath)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to convert document: %w", err)
 	}
 	yearRegex := regexp.MustCompile(`\d\d\d\d`)
 	numsRegex := regexp.MustCompile(`[[:alpha:].](\d)`)
@@ -294,8 +295,9 @@ func main() {
 	}
 
 	// Save spreadsheet by the given path.
-	if err := f.SaveAs("Book1.xlsx"); err != nil {
-		fmt.Println("Error saving spreadsheet: ", err)
+	if err := f.SaveAs(outputPath); err != nil {
+		return fmt.Errorf("failed to save Excel file: %w", err)
 	}
 
+	return nil
 }
