@@ -10,24 +10,45 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// journal format: eej24_1 (journal_volume_number)
-func GetJournalPage(journal string) []string {
-	parts := strings.Split((journal), "_")
-	if len(parts) < 2 {
-		log.Fatalf("Invalid journal format: %s. Expected format: journal_volume_number", journal)
+// GetJournalPage extracts journal information from DOI and fetches article links
+// DOI format examples:
+// - euroasentj.24.03.02 (EEJ journal, volume 24, number 3)
+// - rusentj.34.3.01 (REJ journal, vol 34, number 3)
+// - invertzool.22.3.01 (IZ journal, volume 22 number 3)
+// - arthsel.34.3.01 (AS journal, volume 34, number 3)
+func GetJournalPage(doi string) []string {
+	if doi == "" {
+		log.Fatalf("DOI is empty")
 		return []string{}
 	}
 
-	// Extract journal prefix and volume
-	journalRegex := regexp.MustCompile(`^([a-zA-Z]+)(\d+)$`)
-	matches := journalRegex.FindStringSubmatch(parts[0])
-	if len(matches) != 3 {
-		log.Fatalf("Invalid journal format: %s", journal)
+	// Parse DOI to extract journal, volume, and number
+	// DOI format: [prefix/]<journal>.<volume>.<number>.<article>
+	// Example: 10.15298/euroasentj.24.01.01 or euroasentj.24.01.01
+	doiRegex := regexp.MustCompile(`(?:[\d.]+/)?([a-z]+)\.(\d+)\.(\d+)\.(\d+)$`)
+	matches := doiRegex.FindStringSubmatch(doi)
+	if len(matches) != 5 {
+		log.Fatalf("Invalid DOI format: %s. Expected format: [prefix/]journal.volume.number.article (e.g., 10.15298/euroasentj.24.01.01)", doi)
 		return []string{}
 	}
-	journalPrefix := strings.ToUpper(matches[1])
+
+	journalCode := matches[1]
 	journalVol := strings.TrimPrefix(matches[2], "0")
-	journalNum := strings.TrimPrefix(parts[1], "0")
+	journalNum := strings.TrimPrefix(matches[3], "0")
+
+	// Map DOI journal codes to full journal prefixes
+	journalCodeMap := map[string]string{
+		"euroasentj":  "EEJ",
+		"rusentj":     "REJ",
+		"invertzool":  "IZ",
+		"arthsel":     "AS",
+	}
+
+	journalPrefix, ok := journalCodeMap[journalCode]
+	if !ok {
+		log.Fatalf("Unknown journal code in DOI: %s", journalCode)
+		return []string{}
+	}
 
 	journalKeyCatalogMap := map[string]string{
 		"IZ":  "Inv_Zool",

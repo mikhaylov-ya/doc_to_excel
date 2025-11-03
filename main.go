@@ -7,6 +7,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -67,7 +69,11 @@ func writeOutput(articles []string) {
 }
 
 func printError(artNum int, message string) {
-	fmt.Printf("Error in article %d: %s\n", artNum, message)
+	fmt.Printf("⚠️  [Article %d] ERROR: %s\n", artNum, message)
+}
+
+func printWarning(artNum int, field string, message string) {
+	fmt.Printf("⚠️  [Article %d] WARNING - %s: %s\n", artNum, field, message)
 }
 
 // processDocument converts a DOC/DOCX file to Excel format
@@ -80,11 +86,50 @@ func processDocument(docPath, outputPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to convert document: %w", err)
 	}
+
+	// Fallback: if docconv returns empty body for .doc files, try catdoc/antiword directly
+	if len(res.Body) == 0 && strings.HasSuffix(strings.ToLower(docPath), ".doc") {
+		fmt.Println("Warning: docconv returned empty content, trying fallback converters...")
+
+		// Try multiple converters in order of preference (catdoc for better encoding)
+		converters := []struct {
+			name string
+			path string
+		}{
+			{"catdoc", "/usr/bin/catdoc"},
+			{"catdoc", "/bin/catdoc"},
+			{"wvText", "/usr/bin/wvText"},
+		}
+
+		converted := false
+		var lastErr error
+
+		for _, conv := range converters {
+			if _, err := os.Stat(conv.path); err == nil {
+				cmd := exec.Command(conv.path, docPath)
+				output, convErr := cmd.Output()
+				if convErr == nil && len(output) > 0 {
+					res.Body = string(output)
+					fmt.Printf("✓ Successfully converted using %s (%d bytes)\n", conv.name, len(res.Body))
+					converted = true
+					break
+				}
+				lastErr = convErr
+			}
+		}
+
+		if !converted {
+			if lastErr != nil {
+				return fmt.Errorf("docconv returned empty content and all fallback converters failed. Last error: %v", lastErr)
+			}
+			return fmt.Errorf("docconv returned empty content and no fallback converters found (tried: catdoc, wvText)")
+		}
+	}
 	yearRegex := regexp.MustCompile(`\d\d\d\d`)
 	numsRegex := regexp.MustCompile(`[[:alpha:].](\d)`)
 	pagesRegex := regexp.MustCompile(`(\d+)[–-—](\d+)`)
 	abstractRegex := regexp.MustCompile(`(?i)abstract[s.:]`)
-	kwRegex := regexp.MustCompile(`(?i)key\s?words[.:]`)
+	kwRegex := regexp.MustCompile(`(?i)key\s*words[.:]`)
 	doiRegex := regexp.MustCompile(`(?i)\bdoi(?:\s|\.|:)\s?(\d[^\n]*)`)
 	authSuffxRegex := regexp.MustCompile(`\d+(,)?(\*)?`)
 	refSepRegex := regexp.MustCompile(`\r\n|\r|\n`)
@@ -108,17 +153,28 @@ func processDocument(docPath, outputPath string) error {
 		normArt := Article{}
 		referencesArr := refSepRegex.Split(references[artIndex], -1)
 		normArt.references = referencesArr
+		// Extract abstract and keywords
+		var artAbstract, artKW string
 		if len(abstractRegex.Split(art, 2)) < 2 {
-			printError(artIndex+1, fmt.Sprintf("Can't get Abstract from article data: %s", art))
-			fmt.Print(art)
+			printError(artIndex+1, "ABSTRACT section not found in article text")
+			// Continue with empty abstract rather than failing
+			artAbstract = ""
+			artKW = ""
+		} else {
+			abstractAndKW := kwRegex.Split(abstractRegex.Split(art, 2)[1], 2)
+			if len(abstractAndKW) > 0 {
+				artAbstract = abstractRegex.ReplaceAllStringFunc(abstractAndKW[0], deleteSubstring)
+			}
+			if len(abstractAndKW) > 1 {
+				artKW = kwRegex.ReplaceAllStringFunc(abstractAndKW[1], deleteSubstring)
+			} else {
+				// Keywords might be missing, use empty string
+				artKW = ""
+				printWarning(artIndex+1, "KEYWORDS", "Keywords section not found, continuing with empty keywords")
+			}
 		}
-		abstractAndKW := kwRegex.Split(abstractRegex.Split(art, 2)[1], 2)
-		artAbstract, artKW :=
-			abstractRegex.ReplaceAllStringFunc(abstractAndKW[0], deleteSubstring),
-			kwRegex.ReplaceAllStringFunc(abstractAndKW[1], deleteSubstring)
 		normArt.abstract = strings.TrimSpace(artAbstract)
 		normArt.keywords = strings.TrimSpace(artKW)
-
 		// Try different line ending formats
 		var artStrings []string
 
@@ -148,11 +204,21 @@ func processDocument(docPath, outputPath string) error {
 				doi = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(str, "doi"), ":"), "."))
 			}
 		}
+		if doi == "" {
+			printWarning(artIndex+1, "DOI", "DOI not found in article")
+		}
 		normArt.doi = doi
+
 		splittedAuthorsTitleAndMeta := yearRegex.Split(art, 2)
 		if len(splittedAuthorsTitleAndMeta) < 2 {
-			fmt.Print(art)
-			printError(artIndex+1, fmt.Sprintf("Something went wrong when splitting author, title and meta by year: %s", splittedAuthorsTitleAndMeta))
+			printError(artIndex+1, "YEAR: Cannot split authors/title by year pattern")
+			// Continue processing with empty values
+			normArt.title = ""
+			normArt.pages = ""
+			normArt.authors = ""
+			normArt.affiliations = ""
+			articlesNormalized[artIndex] = normArt
+			continue
 		}
 
 		authorsRaw, titleAndMeta := splittedAuthorsTitleAndMeta[0], splittedAuthorsTitleAndMeta[1]
@@ -211,11 +277,11 @@ func processDocument(docPath, outputPath string) error {
 				idx := slices.IndexFunc(affiliationsNumerated, func(s string) bool { return strings.HasPrefix(s, match[1]) })
 				if idx != -1 {
 					if i >= len(affilations) {
-						printError(artIndex+1, "Authors have more affilation numbers than affilations")
+						printError(artIndex+1, "AFFILIATIONS: More affiliation numbers on authors than available affiliations")
 					}
 					affilations[i] = strings.TrimPrefix(affiliationsNumerated[idx], match[1])
 				} else {
-					printError(artIndex+1, fmt.Sprintf("Affilation not found: %s", match))
+					printWarning(artIndex+1, "AFFILIATIONS", fmt.Sprintf("Affiliation number %s not found in text", match[1]))
 				}
 			}
 		}
@@ -232,6 +298,7 @@ func processDocument(docPath, outputPath string) error {
 		}
 		normArt.affiliations = strings.Join(affilations, "; ")
 		articlesNormalized[artIndex] = normArt
+		fmt.Printf("✓ [Article %d] Parsed successfully: DOI=%s, Title='%s'\n", artIndex+1, normArt.doi, normArt.title[:min(50, len(normArt.title))])
 		// (end) ----- AFFILIATIONS BLOCK -------
 	}
 
@@ -283,12 +350,47 @@ func processDocument(docPath, outputPath string) error {
 			f.SetCellValue("References", fmt.Sprintf("F%s", strconv.Itoa(refI)), art.doi)
 		}
 	}
-	journalPathSplit := strings.SplitAfter(docPath, "/")
-	journalInfo := journalPathSplit[len(journalPathSplit)-1]
-	journal := strings.Replace(strings.SplitAfter(journalInfo, ".")[0], "doi.", "", 1)
+	// Extract journal info from the first article's DOI
+	// If no DOI available, fall back to parsing filename
+	var journalIdentifier string
+	if len(articlesNormalized) > 0 && articlesNormalized[0].doi != "" {
+		journalIdentifier = articlesNormalized[0].doi
+		fmt.Println("Using DOI from article:", journalIdentifier)
+	} else {
+		// Fallback: extract from filename (format: REJ34_3doi.doc or timestamp_REJ34_3doi.doc)
+		filename := filepath.Base(docPath)
+		// Remove timestamp prefix if present (pattern: digits_originalname)
+		timestampRegex := regexp.MustCompile(`^\d+_(.+)$`)
+		if matches := timestampRegex.FindStringSubmatch(filename); len(matches) > 1 {
+			filename = matches[1]
+		}
+		// Extract journal format: journal_volume_number[doi].ext
+		journalRegex := regexp.MustCompile(`^([A-Za-z]+)(\d+)_(\d+)`)
+		matches := journalRegex.FindStringSubmatch(filename)
+		if len(matches) < 4 {
+			return fmt.Errorf("cannot determine journal information: no DOI in articles and filename doesn't match expected format (e.g., REJ34_3doi.doc)")
+		}
+		// Convert filename format (REJ34_3) to DOI-like format for GetJournalPage
+		journalCode := strings.ToLower(matches[1])
+		volume := matches[2]
+		number := matches[3]
 
-	fmt.Println(journal)
-	links := GetJournalPage(journal)
+		// Map journal codes to DOI format
+		journalCodeToDOI := map[string]string{
+			"eej": "euroasentj",
+			"rej": "rusentj",
+			"iz":  "invertzool",
+			"as":  "arthsel",
+		}
+		doiJournalCode, ok := journalCodeToDOI[journalCode]
+		if !ok {
+			return fmt.Errorf("unknown journal code in filename: %s", journalCode)
+		}
+		journalIdentifier = fmt.Sprintf("%s.%s.%s.01", doiJournalCode, volume, number)
+		fmt.Printf("Warning: No articles parsed. Using journal info from filename: %s\n", journalIdentifier)
+	}
+
+	links := GetJournalPage(journalIdentifier)
 	for i, link := range links {
 		fmt.Println(link)
 		f.SetCellValue("Doi", fmt.Sprintf("C%s", strconv.Itoa(i+1)), link)
