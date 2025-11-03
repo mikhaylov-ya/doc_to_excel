@@ -28,9 +28,13 @@ FROM alpine:latest
 RUN apk add --no-cache \
     ca-certificates \
     poppler-utils \
-    antiword \
     tesseract-ocr \
-    tzdata
+    tzdata \
+    wv \
+    && \
+    # Install catdoc from edge/community repo
+    apk add --no-cache catdoc --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community || \
+    echo "catdoc not available"
 
 # Set timezone (optional)
 ENV TZ=UTC
