@@ -316,12 +316,10 @@
             }
         });
 
-        // Reset button
         btnReset.addEventListener('click', () => {
             resetUI();
         });
 
-        // Handle file upload and conversion
         async function handleFile(file) {
             // Validate file type
             const ext = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
@@ -388,13 +386,11 @@
             }
         }
 
-        // Show message
         function showMessage(type, text) {
             message.className = 'message show ' + type;
             message.textContent = text;
         }
 
-        // Format file size
         function formatFileSize(bytes) {
             if (bytes === 0) return '0 Bytes';
             const k = 1024;
@@ -403,7 +399,6 @@
             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
         }
 
-        // Reset UI
         function resetUI() {
             fileInput.value = '';
             fileInfo.classList.remove('show');
