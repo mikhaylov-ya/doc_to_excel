@@ -117,8 +117,14 @@ func handleConvert(c *gin.Context) {
 	err = processDocument(inputPath, outputPath)
 	if err != nil {
 		log.Printf("❌ Processing failed: %v\n", err)
-		// Clean up input file
-		os.Remove(inputPath)
+		// Clean up input file immediately on error
+		if removeErr := os.Remove(inputPath); removeErr != nil {
+			log.Printf("⚠️  Failed to delete input file after error: %v\n", removeErr)
+		}
+		// Clean up output file if it was partially created
+		if removeErr := os.Remove(outputPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			log.Printf("⚠️  Failed to delete output file after error: %v\n", removeErr)
+		}
 
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("Failed to process document: %v", err),
@@ -128,7 +134,6 @@ func handleConvert(c *gin.Context) {
 
 	log.Printf("✅ Processed successfully: %s → %s\n", file.Filename, outputFilename)
 
-	// 7. Return Excel file
 	baseFilename := file.Filename[:len(file.Filename)-len(ext)]
 	downloadFilename := fmt.Sprintf("%s.xlsx", baseFilename)
 
@@ -137,7 +142,6 @@ func handleConvert(c *gin.Context) {
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	c.File(outputPath)
 
-	// 8. Schedule cleanup (delete files after 30 seconds)
 	go cleanupFiles(inputPath, outputPath, file.Filename)
 }
 
@@ -155,7 +159,6 @@ func cleanupFiles(inputPath, outputPath, filename string) {
 	log.Printf("🗑️  Cleaned up: %s\n", filename)
 }
 
-// corsMiddleware enables CORS for cross-origin requests
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
