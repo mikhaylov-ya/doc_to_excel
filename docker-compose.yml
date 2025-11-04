@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   doc-to-excel:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: doc-to-excel:latest
     container_name: doc-to-excel-converter
     ports:
       - "8080:8080"

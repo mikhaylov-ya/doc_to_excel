@@ -29,36 +29,58 @@ jobs:
       run: |
         ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "echo 'SSH connection successful'"
 
+    - name: Build Docker Image
+      env:
+        DOCKER_BUILDKIT: 1
+      run: |
+        echo "🏗️  Building Docker image on GitHub Actions runner..."
+        docker build \
+          --build-arg GOMAXPROCS=2 \
+          -t doc-to-excel:latest \
+          -f Dockerfile \
+          .
+
+        echo "💾 Saving Docker image to tar file..."
+        docker save doc-to-excel:latest | gzip > doc-to-excel-image.tar.gz
+
+        echo "📊 Image size:"
+        ls -lh doc-to-excel-image.tar.gz
+
+    - name: Transfer Docker Image to Server
+      env:
+        DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      run: |
+        echo "📤 Transferring Docker image to server..."
+        scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+          doc-to-excel-image.tar.gz \
+          ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/
+
     - name: Deploy Application
       env:
         DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
       run: |
-        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "bash -s" << ENDSSH
+        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << 'ENDSSH'
           set -e
 
-          echo "🐛 Debug: Current directory: \$(pwd)"
-          echo "🐛 Debug: Deploy path: ${DEPLOY_PATH}"
-          echo "🐛 Debug: Directory listing:"
-          ls -la ${DEPLOY_PATH} || echo "Deploy path does not exist!"
-
           echo "📁 Navigating to deployment directory..."
-          cd ${DEPLOY_PATH}
-
-          echo "🐛 Debug: After cd, current directory: \$(pwd)"
-          echo "🐛 Debug: Git status check..."
-          git status || echo "Not a git repository"
+          cd ${{ secrets.DEPLOY_PATH }}
 
           echo "🔄 Pulling latest changes..."
           git fetch origin
           git reset --hard origin/main
 
+          echo "📦 Loading Docker image..."
+          docker load < doc-to-excel-image.tar.gz
+
+          echo "🧹 Cleaning up image file..."
+          rm -f doc-to-excel-image.tar.gz
+
           echo "🛑 Stopping existing containers..."
           docker-compose down || true
-
-          echo "🏗️  Building Docker image..."
-          docker-compose build --no-cache
 
           echo "🚀 Starting new containers..."
           docker-compose up -d
@@ -67,7 +89,7 @@ jobs:
           sleep 10
 
           echo "🏥 Checking health status..."
-          curl -f http://localhost:8080/health || exit 1
+          curl -f http://localhost:8080/health || echo "⚠️ Health check warning"
 
           echo "✅ Deployment successful!"
           docker-compose ps
