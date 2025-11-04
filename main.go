@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -308,30 +307,91 @@ func processDocument(docPath, outputPath string) error {
 			fmt.Println(err)
 		}
 	}()
+
+	// Rename Sheet1 to "articles"
+	f.SetSheetName("Sheet1", "articles")
+
+	// Create column headers
+	headers := []struct {
+		cell  string
+		value string
+	}{
+		{"A1", "articles.total_number"},
+		{"B1", "pubdate"},
+		{"C1", "articles.volume"},
+		{"D1", "articles.issue"},
+		{"E1", "articles.pages"},
+		{"F1", "articles.authors"},
+		{"G1", "articles.affilations"},
+		{"H1", "articles.title"},
+		{"I1", "articles.key_words"},
+		{"J1", "articles.summary"},
+		{"K1", "articles.number"},
+		{"L1", "articles.DOI"},
+	}
+
+	for _, h := range headers {
+		f.SetCellValue("articles", h.cell, h.value)
+	}
+
 	f.NewSheet("References")
 	f.NewSheet("Doi")
 
+	// Parse web data BEFORE filling the articles sheet
+	// Extract journal info from the first article's DOI
+	var journalInfo JournalInfo
+	if len(articlesNormalized) == 0 {
+		return fmt.Errorf("no articles parsed from document")
+	}
+	if articlesNormalized[0].doi == "" {
+		return fmt.Errorf("first article has no DOI - cannot determine journal information")
+	}
+
+	fmt.Println("Using DOI from first article:", articlesNormalized[0].doi)
+	journalInfo = GetJournalPage(articlesNormalized[0].doi)
+	fmt.Printf("Journal Info - Volume: %s, Issue: %s, Pubdate: %s, Articles: %d\n",
+		journalInfo.Volume, journalInfo.Issue, journalInfo.Pubdate, len(journalInfo.Links))
+
+	// Fill the Doi sheet with article links
+	for i, link := range journalInfo.Links {
+		fmt.Println(link)
+		f.SetCellValue("Doi", fmt.Sprintf("A%s", strconv.Itoa(i+1)), link)
+	}
+
+	// Now fill the articles sheet with parsed data and web data
 	var refI = 0
 	for artI, art := range articlesNormalized {
 		artNumStr := strconv.Itoa(artI + 1)
-		pagesCell := fmt.Sprintf("A%s", artNumStr)
-		authorsCell := fmt.Sprintf("B%s", artNumStr)
-		affiliationsCell := fmt.Sprintf("C%s", artNumStr)
-		titleCell := fmt.Sprintf("D%s", artNumStr)
-		keywordCell := fmt.Sprintf("E%s", artNumStr)
-		abstractCell := fmt.Sprintf("F%s", artNumStr)
-		numCell := fmt.Sprintf("G%s", artNumStr)
-		doiCell := fmt.Sprintf("H%s", artNumStr)
+		// Row index is artI + 2 (skip header row)
+		rowNum := strconv.Itoa(artI + 2)
 
+		// Map to new column structure:
+		// A: articles.total_number (leave empty for now)
+		// B: pubdate (from web)
+		// C: articles.volume (from web)
+		// D: articles.issue (from web)
+		// E: articles.pages
+		// F: articles.authors
+		// G: articles.affilations
+		// H: articles.title
+		// I: articles.key_words
+		// J: articles.summary
+		// K: articles.number
+		// L: articles.DOI
+
+		// Leave A (total_number) empty for now
+		f.SetCellValue("articles", fmt.Sprintf("B%s", rowNum), journalInfo.Pubdate)
+		f.SetCellValue("articles", fmt.Sprintf("C%s", rowNum), journalInfo.Volume)
+		f.SetCellValue("articles", fmt.Sprintf("D%s", rowNum), journalInfo.Issue)
+		f.SetCellValue("articles", fmt.Sprintf("E%s", rowNum), art.pages)
+		f.SetCellValue("articles", fmt.Sprintf("F%s", rowNum), art.authors)
+		f.SetCellValue("articles", fmt.Sprintf("G%s", rowNum), art.affiliations)
+		f.SetCellValue("articles", fmt.Sprintf("H%s", rowNum), art.title)
+		f.SetCellValue("articles", fmt.Sprintf("I%s", rowNum), art.keywords)
+		f.SetCellValue("articles", fmt.Sprintf("J%s", rowNum), art.abstract)
+		f.SetCellValue("articles", fmt.Sprintf("K%s", rowNum), artNumStr)
+		f.SetCellValue("articles", fmt.Sprintf("L%s", rowNum), art.doi)
 		doiSheetdoiCell := fmt.Sprintf("B%s", artNumStr)
-		f.SetCellValue("Sheet1", pagesCell, art.pages)
-		f.SetCellValue("Sheet1", authorsCell, art.authors)
-		f.SetCellValue("Sheet1", affiliationsCell, art.affiliations)
-		f.SetCellValue("Sheet1", titleCell, art.title)
-		f.SetCellValue("Sheet1", keywordCell, art.keywords)
-		f.SetCellValue("Sheet1", abstractCell, art.abstract)
-		f.SetCellValue("Sheet1", numCell, artNumStr)
-		f.SetCellValue("Sheet1", doiCell, art.doi)
 
 		f.SetCellValue("Doi", doiSheetdoiCell, art.doi)
 		fmt.Printf("Article %d: Success\n", artI+1)
@@ -349,51 +409,6 @@ func processDocument(docPath, outputPath string) error {
 			f.SetCellValue("References", fmt.Sprintf("E%s", strconv.Itoa(refI)), meta)
 			f.SetCellValue("References", fmt.Sprintf("F%s", strconv.Itoa(refI)), art.doi)
 		}
-	}
-	// Extract journal info from the first article's DOI
-	// If no DOI available, fall back to parsing filename
-	var journalIdentifier string
-	if len(articlesNormalized) > 0 && articlesNormalized[0].doi != "" {
-		journalIdentifier = articlesNormalized[0].doi
-		fmt.Println("Using DOI from article:", journalIdentifier)
-	} else {
-		// Fallback: extract from filename (format: REJ34_3doi.doc or timestamp_REJ34_3doi.doc)
-		filename := filepath.Base(docPath)
-		// Remove timestamp prefix if present (pattern: digits_originalname)
-		timestampRegex := regexp.MustCompile(`^\d+_(.+)$`)
-		if matches := timestampRegex.FindStringSubmatch(filename); len(matches) > 1 {
-			filename = matches[1]
-		}
-		// Extract journal format: journal_volume_number[doi].ext
-		journalRegex := regexp.MustCompile(`^([A-Za-z]+)(\d+)_(\d+)`)
-		matches := journalRegex.FindStringSubmatch(filename)
-		if len(matches) < 4 {
-			return fmt.Errorf("cannot determine journal information: no DOI in articles and filename doesn't match expected format (e.g., REJ34_3doi.doc)")
-		}
-		// Convert filename format (REJ34_3) to DOI-like format for GetJournalPage
-		journalCode := strings.ToLower(matches[1])
-		volume := matches[2]
-		number := matches[3]
-
-		// Map journal codes to DOI format
-		journalCodeToDOI := map[string]string{
-			"eej": "euroasentj",
-			"rej": "rusentj",
-			"iz":  "invertzool",
-			"as":  "arthsel",
-		}
-		doiJournalCode, ok := journalCodeToDOI[journalCode]
-		if !ok {
-			return fmt.Errorf("unknown journal code in filename: %s", journalCode)
-		}
-		journalIdentifier = fmt.Sprintf("%s.%s.%s.01", doiJournalCode, volume, number)
-		fmt.Printf("Warning: No articles parsed. Using journal info from filename: %s\n", journalIdentifier)
-	}
-
-	links := GetJournalPage(journalIdentifier)
-	for i, link := range links {
-		fmt.Println(link)
-		f.SetCellValue("Doi", fmt.Sprintf("C%s", strconv.Itoa(i+1)), link)
 	}
 
 	// Save spreadsheet by the given path.

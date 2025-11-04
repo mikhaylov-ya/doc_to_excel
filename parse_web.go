@@ -10,16 +10,24 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
+// JournalInfo contains parsed journal metadata
+type JournalInfo struct {
+	Volume  string
+	Issue   string
+	Pubdate string
+	Links   []string
+}
+
 // GetJournalPage extracts journal information from DOI and fetches article links
 // DOI format examples:
 // - euroasentj.24.03.02 (EEJ journal, volume 24, number 3)
 // - rusentj.34.3.01 (REJ journal, vol 34, number 3)
 // - invertzool.22.3.01 (IZ journal, volume 22 number 3)
 // - arthsel.34.3.01 (AS journal, volume 34, number 3)
-func GetJournalPage(doi string) []string {
+func GetJournalPage(doi string) JournalInfo {
 	if doi == "" {
 		log.Fatalf("DOI is empty")
-		return []string{}
+		return JournalInfo{}
 	}
 
 	// Parse DOI to extract journal, volume, and number
@@ -29,7 +37,7 @@ func GetJournalPage(doi string) []string {
 	matches := doiRegex.FindStringSubmatch(doi)
 	if len(matches) != 5 {
 		log.Fatalf("Invalid DOI format: %s. Expected format: [prefix/]journal.volume.number.article (e.g., 10.15298/euroasentj.24.01.01)", doi)
-		return []string{}
+		return JournalInfo{}
 	}
 
 	journalCode := matches[1]
@@ -47,7 +55,7 @@ func GetJournalPage(doi string) []string {
 	journalPrefix, ok := journalCodeMap[journalCode]
 	if !ok {
 		log.Fatalf("Unknown journal code in DOI: %s", journalCode)
-		return []string{}
+		return JournalInfo{}
 	}
 
 	journalKeyCatalogMap := map[string]string{
@@ -77,6 +85,7 @@ func GetJournalPage(doi string) []string {
 
 	// 1. Find <h1> with Volume
 	var numberNode *goquery.Selection
+	var pubdate string
 	doc.Find("h1").EachWithBreak(func(i int, h1 *goquery.Selection) bool {
 		if strings.Contains(h1.Text(), fmt.Sprintf("Volume %s", journalVol)) {
 			// 2. Walk siblings to find <p> with Number <num>
@@ -84,6 +93,15 @@ func GetJournalPage(doi string) []string {
 				if goquery.NodeName(s) == "p" &&
 					strings.Contains(s.Text(), fmt.Sprintf("Number %s", journalNum)) {
 					numberNode = s
+
+					// Extract pubdate from text like "Number 3. Published on 20.06.2025"
+					numberText := s.Text()
+					dateRegex := regexp.MustCompile(`Published on (\d{2}\.\d{2}\.\d{4})`)
+					dateMatches := dateRegex.FindStringSubmatch(numberText)
+					if len(dateMatches) > 1 {
+						pubdate = dateMatches[1]
+					}
+
 					return false // stop outer EachWithBreak
 				}
 			}
@@ -93,7 +111,7 @@ func GetJournalPage(doi string) []string {
 
 	if numberNode == nil {
 		log.Fatalf("Could not find Volume %s Number %s", journalVol, journalNum)
-		return []string{}
+		return JournalInfo{}
 	}
 	links := []string{}
 	// 3. Collect articles until next Number/Volume
@@ -119,5 +137,11 @@ func GetJournalPage(doi string) []string {
 			}
 		}
 	}
-	return links
+
+	return JournalInfo{
+		Volume:  journalVol,
+		Issue:   journalNum,
+		Pubdate: pubdate,
+		Links:   links,
+	}
 }
