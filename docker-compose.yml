@@ -9,6 +9,8 @@ services:
     volumes:
       # Optional: persist temp files (for debugging)
       - ./temp:/root/temp
+      # Mount state directory for article numbering persistence
+      - ./state:/root/state
     environment:
       - GIN_MODE=release
       - PORT=8080
