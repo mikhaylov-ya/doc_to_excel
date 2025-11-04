@@ -1,6 +1,9 @@
 # Multi-stage build for smaller final image
 FROM golang:1.23-alpine AS builder
 
+# Build argument for Go parallelism
+ARG GOMAXPROCS=1
+
 # Install build dependencies
 RUN apk add --no-cache \
     git \
@@ -11,15 +14,23 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-# Copy go mod files
+# Set Go build concurrency
+ENV GOMAXPROCS=${GOMAXPROCS}
+
+# Copy go mod files first for better caching
 COPY go.mod go.sum ./
-RUN go mod download
+
+# Download dependencies with cache mount
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 # Copy source code
 COPY *.go ./
 
-# Build the application
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o server .
+# Build with optimizations for speed and smaller binary
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o server .
 
 # Runtime stage
 FROM alpine:latest
