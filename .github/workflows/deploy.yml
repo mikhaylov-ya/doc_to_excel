@@ -35,11 +35,20 @@ jobs:
         DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
       run: |
-        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << 'ENDSSH'
+        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "bash -s" << ENDSSH
           set -e
+
+          echo "🐛 Debug: Current directory: \$(pwd)"
+          echo "🐛 Debug: Deploy path: ${DEPLOY_PATH}"
+          echo "🐛 Debug: Directory listing:"
+          ls -la ${DEPLOY_PATH} || echo "Deploy path does not exist!"
 
           echo "📁 Navigating to deployment directory..."
           cd ${DEPLOY_PATH}
+
+          echo "🐛 Debug: After cd, current directory: \$(pwd)"
+          echo "🐛 Debug: Git status check..."
+          git status || echo "Not a git repository"
 
           echo "🔄 Pulling latest changes..."
           git fetch origin
