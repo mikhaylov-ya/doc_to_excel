@@ -4,3 +4,16 @@
 /bin
 *.txt
 .DS_Store
+
+# Generated nginx configs (keep template only)
+nginx.conf
+*-nginx.conf
+
+# Docker image archives
+*.tar.gz
+doc-to-excel-image.tar.gz
+
+# Temporary files
+temp/
+*.log
+# config.env
