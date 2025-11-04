@@ -267,7 +267,8 @@ func findPublisherPattern(s string) int {
 	// Match: Word(s) starting with capital : Word starting with capital/uppercase
 	// e.g., "Moscow: Nauka", "New York: Academic Press", "Cambridge: MIT Press"
 	// Publisher name can be all caps (MIT) or capitalized (Press)
-	cityPubRe := regexp.MustCompile(`\b([A-Z][a-zA-Z]+(?:,\s+[A-Z][a-zA-Z]+)?)\s*:\s*[A-Z]`)
+	// Updated to handle multi-word city names (e.g., "New York", "San Francisco")
+	cityPubRe := regexp.MustCompile(`\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*(?:,\s+[A-Z][a-zA-Z]+)?)\s*:\s*[A-Z]`)
 
 	if match := cityPubRe.FindStringIndex(s); match != nil {
 		beforeMatch := s[:match[0]]
