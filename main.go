@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"code.sajari.com/docconv/v2"
 	"github.com/xuri/excelize/v2"
@@ -358,6 +359,63 @@ func processDocument(docPath, outputPath string) error {
 		f.SetCellValue("Doi", fmt.Sprintf("A%s", strconv.Itoa(i+1)), link)
 	}
 
+	// STATE MANAGEMENT: Load state and handle numbering
+	journalCode, err := ExtractJournalCodeFromDOI(articlesNormalized[0].doi)
+	if err != nil {
+		return fmt.Errorf("failed to extract journal code: %w", err)
+	}
+
+	stateManager := NewStateManager()
+	state, err := stateManager.LoadState(journalCode)
+	if err != nil {
+		return fmt.Errorf("failed to load state: %w", err)
+	}
+
+	// Check if state is configured (starting point set)
+	if !stateManager.IsConfigured(state) {
+		if err := stateManager.PromptForStartingPoint(state, journalInfo.Volume, journalInfo.Issue); err != nil {
+			return fmt.Errorf("failed to configure state: %w", err)
+		}
+	}
+
+	// Check for duplicate issue
+	var startNum, endNum int
+	if existingIssue, isDuplicate := stateManager.IsIssueProcessed(state, journalInfo.Volume, journalInfo.Issue); isDuplicate {
+		action, err := stateManager.PromptDuplicateAction(*existingIssue, journalCode)
+		if err != nil {
+			return fmt.Errorf("failed to get user choice: %w", err)
+		}
+
+		switch action {
+		case SkipProcessing:
+			fmt.Println("Skipping processing as requested.")
+			return nil
+		case ReprocessSameNumbers:
+			fmt.Printf("Reprocessing with existing numbers %d-%d\n", existingIssue.StartNumber, existingIssue.EndNumber)
+			startNum = existingIssue.StartNumber
+			endNum = existingIssue.EndNumber
+			// Remove old entry so we can add the new one
+			if err := stateManager.RemoveIssue(state, journalInfo.Volume, journalInfo.Issue); err != nil {
+				return fmt.Errorf("failed to remove old issue entry: %w", err)
+			}
+		case ReprocessNewNumbers:
+			fmt.Println("Reprocessing with NEW numbers")
+			// Remove old entry
+			if err := stateManager.RemoveIssue(state, journalInfo.Volume, journalInfo.Issue); err != nil {
+				return fmt.Errorf("failed to remove old issue entry: %w", err)
+			}
+			// Allocate new numbers
+			startNum, endNum = stateManager.AllocateNumbers(state, len(articlesNormalized))
+			fmt.Printf("Allocated new numbers: %d-%d\n", startNum, endNum)
+		case Abort:
+			return fmt.Errorf("processing aborted by user")
+		}
+	} else {
+		// New issue: allocate numbers
+		startNum, endNum = stateManager.AllocateNumbers(state, len(articlesNormalized))
+		fmt.Printf("Allocated article numbers: %d-%d\n", startNum, endNum)
+	}
+
 	// Now fill the articles sheet with parsed data and web data
 	var refI = 0
 	for artI, art := range articlesNormalized {
@@ -366,7 +424,7 @@ func processDocument(docPath, outputPath string) error {
 		rowNum := strconv.Itoa(artI + 2)
 
 		// Map to new column structure:
-		// A: articles.total_number (leave empty for now)
+		// A: articles.total_number (from state management)
 		// B: pubdate (from web)
 		// C: articles.volume (from web)
 		// D: articles.issue (from web)
@@ -379,7 +437,9 @@ func processDocument(docPath, outputPath string) error {
 		// K: articles.number
 		// L: articles.DOI
 
-		// Leave A (total_number) empty for now
+		// Fill total_number from allocated range
+		totalNumber := startNum + artI
+		f.SetCellValue("articles", fmt.Sprintf("A%s", rowNum), totalNumber)
 		f.SetCellValue("articles", fmt.Sprintf("B%s", rowNum), journalInfo.Pubdate)
 		f.SetCellValue("articles", fmt.Sprintf("C%s", rowNum), journalInfo.Volume)
 		f.SetCellValue("articles", fmt.Sprintf("D%s", rowNum), journalInfo.Issue)
@@ -415,6 +475,24 @@ func processDocument(docPath, outputPath string) error {
 	if err := f.SaveAs(outputPath); err != nil {
 		return fmt.Errorf("failed to save Excel file: %w", err)
 	}
+
+	// Record processed issue in state (only after successful save)
+	processedIssue := ProcessedIssue{
+		Volume:        journalInfo.Volume,
+		Issue:         journalInfo.Issue,
+		ArticleCount:  len(articlesNormalized),
+		StartNumber:   startNum,
+		EndNumber:     endNum,
+		Pubdate:       journalInfo.Pubdate,
+		ProcessedDate: time.Now(),
+	}
+
+	if err := stateManager.RecordIssue(state, processedIssue); err != nil {
+		return fmt.Errorf("failed to update state: %w", err)
+	}
+
+	fmt.Printf("\n✓ State updated: articles numbered %d-%d\n", startNum, endNum)
+	fmt.Printf("✓ Excel file saved: %s\n", outputPath)
 
 	return nil
 }

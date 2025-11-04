@@ -1,0 +1,21 @@
+# European Entomological Journal State File
+# This file tracks end-to-end article numbering for EEJ
+
+journal_code: EEJ
+journal_name: European Entomological Journal
+
+# Starting point for end-to-end numbering
+# Set these values to begin tracking (0 = not configured)
+starting_point:
+  volume: 24
+  issue: 3
+  counter: 382
+
+# Current counter - next article will get this number
+current_counter: 390
+
+# History of processed issues (automatically maintained)
+processed_issues: []
+
+# Maximum number of issues to keep in history
+max_history: 100
