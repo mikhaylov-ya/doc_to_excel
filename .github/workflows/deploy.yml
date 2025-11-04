@@ -53,7 +53,12 @@ jobs:
         DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
       run: |
         echo "📤 Transferring Docker image to server..."
-        scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+        # Use rsync for faster transfer with progress and resume capability
+        rsync -avz --progress -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+          doc-to-excel-image.tar.gz \
+          ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/ || \
+        # Fallback to scp with compression if rsync fails
+        scp -C -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 \
           doc-to-excel-image.tar.gz \
           ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/
 
