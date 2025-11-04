@@ -58,7 +58,6 @@ fi
 
 # Copy template and replace placeholders
 sed "s/DOMAIN_PLACEHOLDER/$DOMAIN/g" nginx.conf.template > /etc/nginx/sites-available/$DOMAIN
-sed -i "s/\${DOMAIN_PLACEHOLDER}/$DOMAIN/g" /etc/nginx/sites-available/$DOMAIN
 
 echo "✅ Created /etc/nginx/sites-available/$DOMAIN"
 

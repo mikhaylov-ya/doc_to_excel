@@ -29,6 +29,6 @@ server {
     add_header X-XSS-Protection "1; mode=block" always;
 
     # Logging
-    access_log /var/log/nginx/${DOMAIN_PLACEHOLDER}_access.log;
-    error_log /var/log/nginx/${DOMAIN_PLACEHOLDER}_error.log;
+    access_log /var/log/nginx/DOMAIN_PLACEHOLDER_access.log;
+    error_log /var/log/nginx/DOMAIN_PLACEHOLDER_error.log;
 }

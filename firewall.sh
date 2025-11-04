@@ -77,11 +77,18 @@ curl -s http://localhost:8080/health | head -5 || wget -q -O- http://localhost:8
 echo ""
 echo "✅ Port 8080 should now be accessible from outside!"
 
-# Get all IPs
-ALL_IPS=$(hostname -I)
-echo "🌐 Server IPs detected: $ALL_IPS"
-echo ""
-echo "📍 Try accessing the service at:"
-for ip in $ALL_IPS; do
-    echo "   http://$ip:8080"
-done
+# Get public IP (exclude Docker/private networks)
+PUBLIC_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '^127\.' | grep -v '^172\.' | grep -v '^10\.' | grep -v '^192\.168\.' | head -1)
+
+if [ -z "$PUBLIC_IP" ]; then
+    # Fallback: get from config.env if exists
+    if [ -f "config.env" ]; then
+        source config.env
+        PUBLIC_IP="$DOMAIN"
+    else
+        PUBLIC_IP=$(hostname -I | awk '{print $1}')
+    fi
+fi
+
+echo "🌐 Public address: $PUBLIC_IP"
+echo "📍 Access service at: http://$PUBLIC_IP:8080"
