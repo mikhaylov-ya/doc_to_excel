@@ -1,0 +1,84 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  deploy:
+    name: Deploy to Host Server
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up SSH key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Test SSH Connection
+      run: |
+        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "echo 'SSH connection successful'"
+
+    - name: Deploy Application
+      env:
+        DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      run: |
+        ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << 'ENDSSH'
+          set -e
+
+          echo "📁 Navigating to deployment directory..."
+          cd ${DEPLOY_PATH}
+
+          echo "🔄 Pulling latest changes..."
+          git fetch origin
+          git reset --hard origin/main
+
+          echo "🛑 Stopping existing containers..."
+          docker-compose down || true
+
+          echo "🏗️  Building Docker image..."
+          docker-compose build --no-cache
+
+          echo "🚀 Starting new containers..."
+          docker-compose up -d
+
+          echo "⏳ Waiting for service to be healthy..."
+          sleep 10
+
+          echo "🏥 Checking health status..."
+          curl -f http://localhost:8080/health || exit 1
+
+          echo "✅ Deployment successful!"
+          docker-compose ps
+        ENDSSH
+
+    - name: Verify Deployment
+      run: |
+        echo "🔍 Verifying deployment on http://${{ secrets.DEPLOY_HOST }}:8080"
+        sleep 5
+        curl -f http://${{ secrets.DEPLOY_HOST }}:8080/health || echo "⚠️ Health check failed, but deployment may still be in progress"
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -f ~/.ssh/deploy_key
+
+    - name: Notify Success
+      if: success()
+      run: |
+        echo "🎉 Deployment to ${{ secrets.DEPLOY_HOST }} completed successfully!"
+        echo "📍 Service is running at: http://${{ secrets.DEPLOY_HOST }}:8080"
+
+    - name: Notify Failure
+      if: failure()
+      run: |
+        echo "❌ Deployment failed. Check the logs above for details."
+        exit 1
