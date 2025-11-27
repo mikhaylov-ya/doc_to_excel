@@ -233,43 +233,17 @@ func (sm *StateManager) RemoveIssue(state *JournalState, volume, issue string) e
 	return sm.SaveState(state)
 }
 
-// PromptDuplicateAction prompts the user for action when a duplicate is found
-func (sm *StateManager) PromptDuplicateAction(existingIssue ProcessedIssue, journalCode string) (DuplicateAction, error) {
+// HandleDuplicateIssue handles when a duplicate issue is detected
+// Default behavior: reprocess with existing numbers
+func (sm *StateManager) HandleDuplicateIssue(existingIssue ProcessedIssue, journalCode string) DuplicateAction {
 	fmt.Println("\n⚠️  Issue already processed!")
 	fmt.Printf("Journal: %s, Volume: %s, Issue: %s\n", journalCode, existingIssue.Volume, existingIssue.Issue)
 	fmt.Printf("Previously processed on: %s\n", existingIssue.ProcessedDate.Format("2006-01-02 15:04:05"))
-	fmt.Printf("Articles: %d (numbers %d-%d)\n\n",
-		existingIssue.ArticleCount, existingIssue.StartNumber, existingIssue.EndNumber)
-
-	fmt.Println("What would you like to do?")
-	fmt.Println("[1] Skip processing (exit)")
-	fmt.Println("[2] Reprocess (keep existing numbers)")
-	fmt.Println("[3] Reprocess with NEW numbers")
-	fmt.Println("[4] Abort")
+	fmt.Printf("Articles: %d (numbers %d-%d)\n", existingIssue.ArticleCount, existingIssue.StartNumber, existingIssue.EndNumber)
+	fmt.Println("→ Reprocessing with existing numbers (default behavior)")
 	fmt.Println()
 
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Choice: ")
-	choiceStr, _ := reader.ReadString('\n')
-	choiceStr = strings.TrimSpace(choiceStr)
-
-	choice, err := strconv.Atoi(choiceStr)
-	if err != nil || choice < 1 || choice > 4 {
-		return Abort, fmt.Errorf("invalid choice")
-	}
-
-	switch choice {
-	case 1:
-		return SkipProcessing, nil
-	case 2:
-		return ReprocessSameNumbers, nil
-	case 3:
-		return ReprocessNewNumbers, nil
-	case 4:
-		return Abort, nil
-	default:
-		return Abort, fmt.Errorf("invalid choice")
-	}
+	return ReprocessSameNumbers
 }
 
 // ExtractJournalCodeFromDOI extracts the journal code from a DOI
