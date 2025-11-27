@@ -336,7 +336,51 @@ func processDocument(docPath, outputPath string) error {
 	}
 
 	f.NewSheet("References")
-	f.NewSheet("Doi")
+
+	refHeaders := []struct {
+		cell  string
+		value string
+	}{
+		{"A1", "ref.full"},
+		{"B1", "ref.authors"},
+		{"C1", "ref.year"},
+		{"D1", "ref.title"},
+		{"E1", "ref.meta"},
+		{"F1", "ref.art_doi"},
+	}
+
+	for _, h := range refHeaders {
+		f.SetCellValue("References", h.cell, h.value)
+	}
+
+	f.NewSheet("doi")
+
+	doiHeaders := []struct {
+		cell  string
+		value string
+	}{
+		{"A1", "link"},
+		{"B1", "doi"},
+	}
+
+	for _, h := range doiHeaders {
+		f.SetCellValue("doi", h.cell, h.value)
+	}
+
+	f.NewSheet("pubdate")
+
+	pubdateHeaders := []struct {
+		cell  string
+		value string
+	}{
+		{"A1", "volume"},
+		{"B1", "issue"},
+		{"C1", "pubdate"},
+	}
+
+	for _, h := range pubdateHeaders {
+		f.SetCellValue("pubdate", h.cell, h.value)
+	}
 
 	// Parse web data BEFORE filling the articles sheet
 	// Extract journal info from the first article's DOI
@@ -353,10 +397,14 @@ func processDocument(docPath, outputPath string) error {
 	fmt.Printf("Journal Info - Volume: %s, Issue: %s, Pubdate: %s, Articles: %d\n",
 		journalInfo.Volume, journalInfo.Issue, journalInfo.Pubdate, len(journalInfo.Links))
 
+	f.SetCellValue("pubdate", "A1", journalInfo.Volume)
+	f.SetCellValue("pubdate", "B1", journalInfo.Issue)
+	f.SetCellValue("pubdate", "C1", journalInfo.Pubdate)
+
 	// Fill the Doi sheet with article links
 	for i, link := range journalInfo.Links {
 		fmt.Println(link)
-		f.SetCellValue("Doi", fmt.Sprintf("A%s", strconv.Itoa(i+1)), link)
+		f.SetCellValue("doi", fmt.Sprintf("A%s", strconv.Itoa(i+1)), link)
 	}
 
 	// STATE MANAGEMENT: Load state and handle numbering
@@ -381,10 +429,7 @@ func processDocument(docPath, outputPath string) error {
 	// Check for duplicate issue
 	var startNum, endNum int
 	if existingIssue, isDuplicate := stateManager.IsIssueProcessed(state, journalInfo.Volume, journalInfo.Issue); isDuplicate {
-		action, err := stateManager.PromptDuplicateAction(*existingIssue, journalCode)
-		if err != nil {
-			return fmt.Errorf("failed to get user choice: %w", err)
-		}
+		action := stateManager.HandleDuplicateIssue(*existingIssue, journalCode)
 
 		switch action {
 		case SkipProcessing:
@@ -417,7 +462,7 @@ func processDocument(docPath, outputPath string) error {
 	}
 
 	// Now fill the articles sheet with parsed data and web data
-	var refI = 0
+	var refI = 1 // Start at 1 because row 1 has headers
 	for artI, art := range articlesNormalized {
 		artNumStr := strconv.Itoa(artI + 1)
 		// Row index is artI + 2 (skip header row)
@@ -453,7 +498,7 @@ func processDocument(docPath, outputPath string) error {
 		f.SetCellValue("articles", fmt.Sprintf("L%s", rowNum), art.doi)
 		doiSheetdoiCell := fmt.Sprintf("B%s", artNumStr)
 
-		f.SetCellValue("Doi", doiSheetdoiCell, art.doi)
+		f.SetCellValue("doi", doiSheetdoiCell, art.doi)
 		fmt.Printf("Article %d: Success\n", artI+1)
 
 		for artRefI, ref := range art.references {
