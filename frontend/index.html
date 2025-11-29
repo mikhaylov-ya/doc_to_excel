@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DOC to Excel Converter</title>
+    <title>DOI Excel Converter</title>
     <style>
         * {
             margin: 0;
@@ -219,6 +219,327 @@
             background: #5568d3;
         }
 
+        .btn-instructions {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: transparent;
+            color: #667eea;
+            border: 2px solid #667eea;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-instructions:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.6);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal.show {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background-color: #fff;
+            margin: 3% auto;
+            padding: 0;
+            border-radius: 15px;
+            max-width: 900px;
+            width: 90%;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.3);
+            animation: slideDown 0.3s ease;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            padding: 25px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 32px;
+            cursor: pointer;
+            padding: 0;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.3s ease;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .modal-body {
+            padding: 30px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .modal-intro {
+            color: #555;
+            line-height: 1.6;
+            margin-bottom: 25px;
+            padding: 15px;
+            background: #f0f2ff;
+            border-left: 4px solid #667eea;
+            border-radius: 5px;
+        }
+
+        .modal-footer {
+            padding: 20px 30px;
+            border-top: 1px solid #eee;
+            text-align: right;
+            border-radius: 0 0 15px 15px;
+        }
+
+        .btn-modal-close {
+            padding: 10px 25px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: background 0.3s ease;
+        }
+
+        .btn-modal-close:hover {
+            background: #5568d3;
+        }
+
+        /* Expansion Panel Styles */
+        .expansion-panel {
+            margin-bottom: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .expansion-panel:hover {
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+        }
+
+        .panel-header {
+            padding: 18px 20px;
+            background: #f8f9ff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: background 0.3s ease;
+            user-select: none;
+        }
+
+        .panel-header:hover {
+            background: #f0f2ff;
+        }
+
+        .expansion-panel.active .panel-header {
+            background: #e8ebff;
+        }
+
+        .panel-icon {
+            font-size: 12px;
+            transition: transform 0.3s ease;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .expansion-panel.active .panel-icon {
+            transform: rotate(90deg);
+        }
+
+        .panel-title {
+            font-weight: 600;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .panel-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+            background: white;
+            padding: 0 20px;
+        }
+
+        .expansion-panel.active .panel-content {
+            max-height: 2000px;
+            padding: 20px;
+        }
+
+        .instruction-text {
+            color: #555;
+            line-height: 1.7;
+            margin-bottom: 15px;
+        }
+
+        .instruction-text code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #d63384;
+        }
+
+        /* List styles - need higher specificity to override global reset */
+        .panel-content ul {
+            margin: 10px 0 15px 0;
+            padding-left: 30px;
+            list-style-type: disc;
+        }
+
+        .panel-content li {
+            margin-bottom: 8px;
+            line-height: 1.6;
+            color: #555;
+            padding-left: 5px;
+        }
+
+        .panel-content li:last-child {
+            margin-bottom: 0;
+        }
+
+        .panel-content li b {
+            color: #333;
+            font-weight: 600;
+        }
+
+        .instruction-note {
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff3cd;
+            border-left: 3px solid #ffc107;
+            border-radius: 4px;
+            color: #856404;
+            font-size: 14px;
+        }
+
+        /* Excel-like Table Styles */
+        .excel-example {
+            margin-top: 15px;
+            background: #fafbff;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e8ebff;
+        }
+
+        .excel-header {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .excel-table {
+            display: table;
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .excel-row {
+            display: table-row;
+        }
+
+        .excel-row-header {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+
+        .excel-row-header .excel-cell {
+            color: white;
+            border-color: #5568d3;
+        }
+
+        .excel-cell {
+            display: table-cell;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+            vertical-align: middle;
+        }
+
+        .excel-row:nth-child(even):not(.excel-row-header) {
+            background: #f9f9f9;
+        }
+
+        .cell-valid {
+            border: 2px solid #28a745 !important;
+            background-color: #d4edda !important;
+            color: #155724;
+            font-weight: 500;
+        }
+
+        .cell-invalid {
+            border: 2px solid #dc3545 !important;
+            background-color: #f8d7da !important;
+            color: #721c24;
+            font-weight: 500;
+        }
+
+        .row-invalid {
+            background-color: #fff5f5 !important;
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 30px 20px;
@@ -235,18 +556,39 @@
             .upload-icon {
                 font-size: 48px;
             }
+
+            .modal-content {
+                width: 95%;
+                margin: 5% auto;
+            }
+
+            .modal-header h2 {
+                font-size: 20px;
+            }
+
+            .modal-body {
+                padding: 20px;
+            }
+
+            .excel-table {
+                font-size: 12px;
+            }
+
+            .excel-cell {
+                padding: 8px 6px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📄 DOC to Excel Converter</h1>
-        <p class="subtitle">Convert your Word documents to Excel spreadsheets instantly</p>
+        <h1>📄 DOI: doc[x] -> excel конвертер</h1>
+        <p class="subtitle">Конвертирует документы DOC/DOCX с данными о журнальных DOI в Excel файлы</p>
 
         <div id="uploadArea" class="upload-area">
             <div class="upload-icon">📁</div>
-            <div class="upload-text">Click to upload or drag & drop</div>
-            <div class="upload-hint">Supported formats: .doc, .docx (Max: 50MB)</div>
+            <div class="upload-text">Нажмите для загрузки или перетащите и отпустите</div>
+            <div class="upload-hint">Поддерживаемые форматы: .doc, .docx (макс: 50MB)</div>
             <input type="file" id="fileInput" accept=".doc,.docx">
         </div>
 
@@ -264,11 +606,205 @@
         <div id="message" class="message"></div>
 
         <center>
-            <button id="btnReset" class="btn-reset">Upload Another File</button>
+            <button id="btnReset" class="btn-reset">Загрузить другой файл</button>
         </center>
 
         <div class="footer">
-            Maximum file size: 50 MB • Supported: DOC, DOCX
+            Максимальный размер файла: 50 MB • Поддерживаемые форматы: DOC, DOCX<br>
+            <button id="btnInstructions" class="btn-instructions">📖 Инструкции по обработке Excel файлов</button>
+        </div>
+    </div>
+
+    <!-- Instructions Modal -->
+    <div id="instructionsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📖 Инструкции по постобработке Excel файлов</h2>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-intro">После конвертации документа вам может потребоваться проверить и очистить данные в Excel файле. Ниже приведены распространенные проблемы и способы их решения.</p>
+
+                <!-- Expansion Panel 1 -->
+                <div class="expansion-panel">
+                    <div class="panel-header">
+                        <span class="panel-icon">▶</span>
+                        <span class="panel-title">articles: проверка мест работы авторов</span>
+                    </div>
+                    <div class="panel-content">
+                        <p class="instruction-text">
+                            <ul>
+                                <li>Количество авторов и аффилиаций (мест работы авторов) должно совпадать</li>
+                                <li>Если у всех авторов одинаковые аффилиации (места работы), <b>все они все равно должны быть указаны</b></li>
+                            </ul>
+                        </p>
+
+                        <p class="instruction-text">Нужно проверить, что количество аффилиаций (мест работы авторов) соответствует количеству авторов в статье. Для этого надо пробежаться глазами по колонке "authors" и колонке "affiliations". Места работы разделены <code>;</code> (точка с запятой).</p>
+                        <p class="instruction-text">Приведен самый противный пример, где у всех авторов одинаковые аффилиации, и в их количестве может быть ошибка: <b> указано 3 аффилиации, а авторов 4</b>.</p>
+
+                        <div class="excel-example">
+                            <div class="excel-header">Пример:</div>
+                            <div class="excel-table">
+                                <div class="excel-row excel-row-header">
+                                    <div class="excel-cell">№</div>
+                                    <div class="excel-cell">articles.authors</div>
+                                    <div class="excel-cell">articles.affiliations</div>
+                                </div>
+                                <div class="excel-row row-invalid">
+                                    <div class="excel-cell">1</div>
+                                    <div class="excel-cell">Chaika S.Yu., Benediktov A.A., Ryazanova G.I., Polilov A.A.</div>
+                                    <div class="excel-cell cell-invalid">Faculty of Biology, Lomonosov Moscow State University, Leninskie Gory, 1, building 12, Moscow 119234 Russia; Faculty of Biology, Lomonosov Moscow State University, Leninskie Gory, 1, building 12, Moscow 119234 Russia; Faculty of Biology, Lomonosov Moscow State University, Leninskie Gory, 1, building 12, Moscow 119234 Russia ❌</div>
+                                </div>
+                                <div class="excel-row row-valid">
+                                    <div class="excel-cell">2</div>
+                                    <div class="excel-cell">Chaika S.Yu., Benediktov A.A., Ryazanova G.I., Polilov A.A.</div>
+                                    <div class="excel-cell cell-valid">Faculty of Biology, Lomonosov Moscow State University, Leninskie Gory, 1, building 12, Moscow 119234 Russia; Faculty of Biology, Lomonosov Moscow State University, Leninskie Gory, 1, building 12, Moscow 119234 Russia; Faculty of Biology, Lomonosov Moscow State University, Leninskie Gory, 1, building 12, Moscow 119234 Russia; Faculty of Biology, Lomonosov Moscow State University, Leninskie Gory, 1, building 12, Moscow 119234 Russia  ✅</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expansion Panel 2 -->
+                <div class="expansion-panel">
+                    <div class="panel-header">
+                        <span class="panel-icon">▶</span>
+                        <span class="panel-title">Удаление дублирующихся записей</span>
+                    </div>
+                    <div class="panel-content">
+                        <p class="instruction-text">Иногда конвертер может создать дублирующиеся строки. Используйте функцию "Удалить дубликаты" в Excel (Данные → Удалить дубликаты).</p>
+
+                        <div class="excel-example">
+                            <div class="excel-header">Пример:</div>
+                            <div class="excel-table">
+                                <div class="excel-row excel-row-header">
+                                    <div class="excel-cell">№</div>
+                                    <div class="excel-cell">DOI</div>
+                                    <div class="excel-cell">Название</div>
+                                </div>
+                                <div class="excel-row">
+                                    <div class="excel-cell">1</div>
+                                    <div class="excel-cell">10.1234/example1</div>
+                                    <div class="excel-cell">Article A</div>
+                                </div>
+                                <div class="excel-row row-invalid">
+                                    <div class="excel-cell cell-invalid">2 ❌</div>
+                                    <div class="excel-cell cell-invalid">10.1234/example1 ❌</div>
+                                    <div class="excel-cell cell-invalid">Article A ❌</div>
+                                </div>
+                                <div class="excel-row">
+                                    <div class="excel-cell">3</div>
+                                    <div class="excel-cell">10.1234/example2</div>
+                                    <div class="excel-cell">Article B</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expansion Panel 3 -->
+                <div class="expansion-panel">
+                    <div class="panel-header">
+                        <span class="panel-icon">▶</span>
+                        <span class="panel-title">Проверка пустых ячеек</span>
+                    </div>
+                    <div class="panel-content">
+                        <p class="instruction-text">Убедитесь, что все обязательные поля заполнены. Пустые ячейки в столбцах DOI или Название статьи могут указывать на ошибки конвертации.</p>
+
+                        <div class="excel-example">
+                            <div class="excel-header">Пример:</div>
+                            <div class="excel-table">
+                                <div class="excel-row excel-row-header">
+                                    <div class="excel-cell">DOI</div>
+                                    <div class="excel-cell">Название</div>
+                                    <div class="excel-cell">Авторы</div>
+                                </div>
+                                <div class="excel-row">
+                                    <div class="excel-cell cell-invalid">❌</div>
+                                    <div class="excel-cell">Missing DOI Article</div>
+                                    <div class="excel-cell">Smith J.</div>
+                                </div>
+                                <div class="excel-row">
+                                    <div class="excel-cell cell-valid">10.1234/example ✅</div>
+                                    <div class="excel-cell cell-valid">Complete Article ✅</div>
+                                    <div class="excel-cell cell-valid">Jones A. ✅</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expansion Panel 4 -->
+                <div class="expansion-panel">
+                    <div class="panel-header">
+                        <span class="panel-icon">▶</span>
+                        <span class="panel-title">Форматирование дат публикации</span>
+                    </div>
+                    <div class="panel-content">
+                        <p class="instruction-text">Даты должны быть в едином формате. Рекомендуется использовать ISO формат (YYYY-MM-DD) или стандартный формат вашего региона.</p>
+
+                        <div class="excel-example">
+                            <div class="excel-header">Пример:</div>
+                            <div class="excel-table">
+                                <div class="excel-row excel-row-header">
+                                    <div class="excel-cell">Дата публикации</div>
+                                    <div class="excel-cell">Статус</div>
+                                </div>
+                                <div class="excel-row">
+                                    <div class="excel-cell cell-invalid">15/03/2024 ❌</div>
+                                    <div class="excel-cell">Смешанный формат</div>
+                                </div>
+                                <div class="excel-row">
+                                    <div class="excel-cell cell-invalid">March 15, 2024 ❌</div>
+                                    <div class="excel-cell">Текстовый формат</div>
+                                </div>
+                                <div class="excel-row">
+                                    <div class="excel-cell cell-valid">2024-03-15 ✅</div>
+                                    <div class="excel-cell">ISO формат (рекомендуется)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expansion Panel 5 -->
+                <div class="expansion-panel">
+                    <div class="panel-header">
+                        <span class="panel-icon">▶</span>
+                        <span class="panel-title">Проверка нумерации</span>
+                    </div>
+                    <div class="panel-content">
+                        <p class="instruction-text">Убедитесь, что нумерация строк последовательна и не содержит пропусков или дублей.</p>
+
+                        <div class="excel-example">
+                            <div class="excel-header">Пример:</div>
+                            <div class="excel-table">
+                                <div class="excel-row excel-row-header">
+                                    <div class="excel-cell">№</div>
+                                    <div class="excel-cell">DOI</div>
+                                </div>
+                                <div class="excel-row">
+                                    <div class="excel-cell cell-valid">1 ✅</div>
+                                    <div class="excel-cell">10.1234/example1</div>
+                                </div>
+                                <div class="excel-row">
+                                    <div class="excel-cell cell-invalid">3 ❌</div>
+                                    <div class="excel-cell">10.1234/example2</div>
+                                </div>
+                                <div class="excel-row">
+                                    <div class="excel-cell cell-valid">2 ✅</div>
+                                    <div class="excel-cell">10.1234/example3</div>
+                                </div>
+                            </div>
+                            <p class="instruction-note">⚠️ Строка 2 пропущена, строка 3 не по порядку</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn-modal-close" id="modalCloseBtn">Закрыть</button>
+            </div>
         </div>
     </div>
 
@@ -282,6 +818,12 @@
         const progressBar = document.getElementById('progressBar');
         const message = document.getElementById('message');
         const btnReset = document.getElementById('btnReset');
+
+        // Modal elements
+        const btnInstructions = document.getElementById('btnInstructions');
+        const instructionsModal = document.getElementById('instructionsModal');
+        const modalClose = document.getElementById('modalClose');
+        const modalCloseBtn = document.getElementById('modalCloseBtn');
 
         // Click to upload
         uploadArea.addEventListener('click', () => {
@@ -407,6 +949,55 @@
             loader.classList.remove('show');
             progressBar.classList.remove('show');
         }
+
+        // Modal functionality
+        btnInstructions.addEventListener('click', () => {
+            instructionsModal.classList.add('show');
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+        });
+
+        function closeModal() {
+            instructionsModal.classList.remove('show');
+            document.body.style.overflow = 'auto'; // Restore scrolling
+        }
+
+        modalClose.addEventListener('click', closeModal);
+        modalCloseBtn.addEventListener('click', closeModal);
+
+        // Close modal when clicking outside of modal content
+        instructionsModal.addEventListener('click', (e) => {
+            if (e.target === instructionsModal) {
+                closeModal();
+            }
+        });
+
+        // Close modal on ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && instructionsModal.classList.contains('show')) {
+                closeModal();
+            }
+        });
+
+        // Expansion panel functionality
+        document.querySelectorAll('.expansion-panel').forEach(panel => {
+            const header = panel.querySelector('.panel-header');
+
+            header.addEventListener('click', () => {
+                const isActive = panel.classList.contains('active');
+
+                // Optional: Close other panels when opening a new one (accordion behavior)
+                // Uncomment the next 3 lines if you want only one panel open at a time
+                // document.querySelectorAll('.expansion-panel').forEach(p => {
+                //     p.classList.remove('active');
+                // });
+
+                if (isActive) {
+                    panel.classList.remove('active');
+                } else {
+                    panel.classList.add('active');
+                }
+            });
+        });
     </script>
 </body>
 </html>
